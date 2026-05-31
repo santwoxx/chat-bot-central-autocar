@@ -1,6 +1,4 @@
 import express, { Request, Response } from "express";
-import path from "path";
-import fs from "fs";
 import { doc, setDoc, getDoc, updateDoc, getDocs, doc as dbDoc, collection, query, orderBy, limit } from "firebase/firestore";
 
 // Types
@@ -780,20 +778,8 @@ async function startServer() {
       console.log("[Backend Mode] Running API routes only.");
     }
   } else {
-    // Statics
-    const distPath = fs.existsSync(path.join(process.cwd(), "dist"))
-      ? path.join(process.cwd(), "dist")
-      : path.join(process.cwd(), "..", "frontend", "dist");
-
-    if (fs.existsSync(distPath)) {
-      app.use(express.static(distPath));
-      app.get("*", (req: Request, res: Response) => {
-        res.sendFile(path.join(distPath, "index.html"));
-      });
-    } else {
-      console.log(`[Backup Node Server] Atenção: ${distPath} não localizado.`);
-    }
-  }
+  console.log("[Production Mode] API Only");
+}
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`[Central Autocar API Engine] Online on http://localhost:${PORT}`);
