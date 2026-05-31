@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore, onSnapshot, doc } from "firebase/firestore";
+import { getAuth, signInWithEmailAndPassword } from "firebase/auth";
 import { GoogleGenAI } from "@google/genai";
 import OpenAI from "openai";
 
@@ -19,6 +20,20 @@ try {
     db = getFirestore(fbApp, firebaseConfig.firestoreDatabaseId || "(default)");
     firebaseActive = true;
     console.log("[Firebase Config] Ativo com sucesso.");
+
+    // Sign in backend authenticated operator if configured
+    const email = process.env.FIREBASE_BACKEND_EMAIL;
+    const password = process.env.FIREBASE_BACKEND_PASSWORD;
+    if (email && password) {
+      const auth = getAuth(fbApp);
+      signInWithEmailAndPassword(auth, email, password)
+        .then((userCredential) => {
+          console.log("[Firebase Auth] Backend autenticado com sucesso como:", userCredential.user.email);
+        })
+        .catch((err) => {
+          console.warn("[Firebase Auth] Erro ao autenticar backend:", err.message);
+        });
+    }
 
     // Listen in real-time to whatsapp settings for extra OpenAI credentials
     const whatsappSettingsDoc = doc(db, "settings", "whatsapp");
@@ -59,7 +74,14 @@ export function getGeminiClient(): GoogleGenAI | null {
     return null;
   }
   try {
-    return new GoogleGenAI({ apiKey: key });
+    return new GoogleGenAI({
+      apiKey: key,
+      httpOptions: {
+        headers: {
+          "User-Agent": "aistudio-build",
+        },
+      },
+    });
   } catch (err) {
     return null;
   }

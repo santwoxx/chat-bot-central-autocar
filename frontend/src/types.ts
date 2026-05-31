@@ -54,3 +54,16 @@ export interface WebhookSimLog {
   payload: string;
   timestamp: string;
 }
+
+export interface WhatsAppConfig {
+  provider: "META" | "EVOLUTION";
+  phoneNumberId: string;
+  accessToken: string;
+  verifyToken: string;
+  useOpenAi: boolean;
+  openAiKey: string;
+  evolutionApiUrl: string;
+  evolutionApiKey: string;
+  evolutionInstanceName: string;
+}
+

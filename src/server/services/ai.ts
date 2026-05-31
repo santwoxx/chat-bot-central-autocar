@@ -17,6 +17,39 @@ export async function classifyLeadIntent(userMessage: string, escalationKeywords
     return "venda_humana";
   }
 
+  // 1. Tenta Gemini primeiro (Requisito 1)
+  const gemini = getGeminiClient();
+  if (gemini) {
+    try {
+      const model = "gemini-3.5-flash";
+      const contents = `Você é um classificador de intenção de clientes em uma loja de autopeças de Itabuna BA. Classifique as intenções do cliente exatamente com um de 3 termos: 'cotacao', 'contato' ou 'venda_humana'.
+
+cotacao: o usuário quer cotar peças, saber marcas, mecânica básica.
+contato: o usuário busca endereço, telefone, contato.
+venda_humana: o usuário expressa pressa, pedido de desconto, quer fechar preço, quer link ou Pix para pagar, quer falar com um vendedor humano, expressa real interesse em comprar, ou usa algum dos seguintes gatilhos de escalação: ${keywords.join(", ")}.
+
+Cliente: "${userMessage}"
+
+Retorne apenas uma das três palavras-chave exatas.`;
+
+      const response = await gemini.models.generateContent({
+        model,
+        contents,
+        config: {
+          temperature: 0.1,
+        }
+      });
+      const res = response.text?.trim()?.toLowerCase() || "cotacao";
+      console.log(`[AI Classification] Gemini Result: "${res}"`);
+      if (res.includes("venda_humana")) return "venda_humana";
+      if (res.includes("contato")) return "contato";
+      return "cotacao";
+    } catch (e) {
+      console.error("[AI Service] Falha na classificação por Gemini (migrando para OpenAI fallback):", e);
+    }
+  }
+
+  // 2. OpenAI Fallback (Requisito 2)
   const openai = getOpenAIClient();
   if (openai) {
     try {
@@ -37,6 +70,7 @@ venda_humana: o usuário expressa pressa, pedido de desconto, quer fechar preço
         max_tokens: 15
       });
       const res = completion.choices[0]?.message?.content?.trim()?.toLowerCase() || "cotacao";
+      console.log(`[AI Classification] OpenAI Fallback Result: "${res}"`);
       if (res.includes("venda_humana")) return "venda_humana";
       if (res.includes("contato")) return "contato";
       return "cotacao";
@@ -66,7 +100,7 @@ export function simulateLocalDialog(msg: string, store: StorePreset): string {
 }
 
 /**
- * Generates completion responses using Gemini, OpenAI, or the fallback simulator.
+ * Generates completion responses using Gemini (principal) with OpenAI fallback.
  */
 export async function generateAIResponse(
   userMessage: string, 
@@ -78,6 +112,31 @@ export async function generateAIResponse(
   
   const systemPrompt = getHumanizedPrompt(flowConfig.aiSystemPrompt);
 
+  // 1. Tenta Gemini (IA Principal) (Requisito 1)
+  const gemini = getGeminiClient();
+  if (gemini) {
+    try {
+      const model = "gemini-3.5-flash";
+      const contents = `[HISTÓRICO DA CONVERSA RECENTE]\n${dialogHistory}\n\nMensagem recente do cliente: "${userMessage}".\n\nResponda diretamente com objetividade de balcão de peças com tom natural, amigável e focado.`;
+      const response = await gemini.models.generateContent({
+        model,
+        contents,
+        config: {
+          systemInstruction: `${systemPrompt}\n\n[CONTEXTO DA FILIAL]\n${storeContext}`,
+          temperature: 0.7,
+        }
+      });
+      const text = response.text?.trim();
+      if (text) {
+        console.log("[AI Generation] Resposta gerada com sucesso via Gemini.");
+        return text;
+      }
+    } catch (err) {
+      console.error("[AI Service] Erro Gemini generateAIResponse (migrando para fallback OpenAI):", err);
+    }
+  }
+
+  // 2. Tenta OpenAI (Fallback Automático) (Requisito 2)
   const openai = getOpenAIClient();
   if (openai) {
     try {
@@ -90,24 +149,17 @@ export async function generateAIResponse(
         temperature: 0.7,
         max_tokens: 220
       });
-      return completion.choices[0]?.message?.content || "";
+      const text = completion.choices[0]?.message?.content?.trim();
+      if (text) {
+        console.log("[AI Generation] Resposta gerada via OpenAI de fallback.");
+        return text;
+      }
     } catch (err) {
-      console.error("[AI Service] Erro OpenAI generateAIResponse:", err);
+      console.error("[AI Service] Erro OpenAI generateAIResponse de fallback:", err);
     }
   }
 
-  const gemini = getGeminiClient();
-  if (gemini) {
-    try {
-      const model = "gemini-3.5-flash";
-      const contents = `${systemPrompt}\n\n[CONTEXTO FILIAL]\n${storeContext}\n\n[HISTÓRICO]\n${dialogHistory}\n\nCliente: "${userMessage}"\n\nResponda diretamente com simpatia comercial`;
-      const response = await gemini.models.generateContent({ model, contents });
-      return response.text?.trim() || "";
-    } catch (err) {
-      console.error("[AI Service] Erro Gemini generateAIResponse:", err);
-    }
-  }
-
+  console.warn("[AI Service] Todos os provedores de IA falharam/insuficientes. Usando sandbox offline para recuperação local.");
   return simulateLocalDialog(userMessage, activeStore);
 }
 
