@@ -1,0 +1,6 @@
+{
+  "name": "Controle ManyChat Autopeças AI",
+  "description": "Painel estilo ManyChat com fluxo automatizado por IA regional (Gemini/OpenAI) e transição para vendas humanas para lojas de autopeças de Itabuna BA.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

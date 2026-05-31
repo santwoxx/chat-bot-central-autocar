@@ -1,0 +1,136 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile inside Central Autocar",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "operador"] },
+        "status": { "type": "string", "enum": ["online", "offline"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "name", "role", "status", "createdAt"]
+    },
+    "Lead": {
+      "title": "Lead",
+      "description": "Customer contact information, status, vehicle, and chatbot mode",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "phone": { "type": "string" },
+        "lastMessage": { "type": "string" },
+        "lastMessageTime": { "type": "string", "format": "date-time" },
+        "mode": { "type": "string", "enum": ["AI", "HUMAN"] },
+        "currentStep": { "type": "string", "enum": ["opt_in", "chatting", "human_escalated"] },
+        "notes": { "type": "string" },
+        "unreadCount": { "type": "integer" },
+        "avatarColor": { "type": "string" }
+      },
+      "required": ["id", "name", "phone", "lastMessage", "lastMessageTime", "mode", "currentStep", "unreadCount", "avatarColor"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Historical message sent or received via WhatsApp / System",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "leadId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant", "system_alert", "agent_human"] },
+        "text": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" },
+        "isButtonResponse": { "type": "boolean" },
+        "buttons": { "type": "array" }
+      },
+      "required": ["id", "leadId", "role", "text", "timestamp"]
+    },
+    "FlowConfig": {
+      "title": "Flow Config",
+      "description": "Configuration details for the ManyChat automation flow",
+      "type": "object",
+      "properties": {
+        "optInText": { "type": "string" },
+        "optInButtons": { "type": "array" },
+        "aiGreeting": { "type": "string" },
+        "aiSystemPrompt": { "type": "string" },
+        "escalationKeywords": { "type": "array" },
+        "activeStoreId": { "type": "string" }
+      },
+      "required": ["optInText", "optInButtons", "aiGreeting", "aiSystemPrompt", "escalationKeywords", "activeStoreId"]
+    },
+    "WhatsAppAccount": {
+      "title": "WhatsApp Account Details",
+      "description": "Meta credentials and phone mapping for single tenant",
+      "type": "object",
+      "properties": {
+        "phoneNumberId": { "type": "string" },
+        "accessToken": { "type": "string" },
+        "verifyToken": { "type": "string" },
+        "useOpenAi": { "type": "boolean" },
+        "openAiKey": { "type": "string" }
+      },
+      "required": ["phoneNumberId", "accessToken", "verifyToken", "useOpenAi", "openAiKey"]
+    },
+    "Analytics": {
+      "title": "Analytics Metrics",
+      "description": "Real-time key statistics tracking, updated in real time via Firestore",
+      "type": "object",
+      "properties": {
+        "totalLeads": { "type": "integer" },
+        "aiHandled": { "type": "integer" },
+        "humanHandled": { "type": "integer" },
+        "conversationsSaved": { "type": "integer" },
+        "averageConfidence": { "type": "integer" },
+        "savedTokens": { "type": "integer" },
+        "responseTimeSavedSec": { "type": "integer" }
+      },
+      "required": ["totalLeads", "aiHandled", "humanHandled", "conversationsSaved", "averageConfidence", "savedTokens", "responseTimeSavedSec"]
+    },
+    "WebhookLog": {
+      "title": "Webhook Log",
+      "description": "Visual log trace of webhook payloads received from Meta Cloud API",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "direction": { "type": "string", "enum": ["INBOUND", "OUTBOUND"] },
+        "type": { "type": "string", "enum": ["text", "button", "template"] },
+        "payload": { "type": "string" },
+        "timestamp": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "direction", "type", "payload", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Administrator and Operator accounts for Central Autocar"
+    },
+    "/leads/{leadId}": {
+      "schema": "Lead",
+      "description": "Customer contact tracking and state details"
+    },
+    "/leads/{leadId}/messages/{messageId}": {
+      "schema": "Message",
+      "description": "WhatsApp and operator messages for a given lead"
+    },
+    "/flows/config": {
+      "schema": "FlowConfig",
+      "description": "ManyChat-style node builder setup"
+    },
+    "/settings/whatsapp": {
+      "schema": "WhatsAppAccount",
+      "description": "Meta credentials and security parameters"
+    },
+    "/analytics/current": {
+      "schema": "Analytics",
+      "description": "Real aggregated operations and costs counters"
+    },
+    "/webhook_logs/{logId}": {
+      "schema": "WebhookLog",
+      "description": "Raw HTTP packet visual analyzer logs"
+    }
+  }
+}

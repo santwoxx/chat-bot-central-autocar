@@ -1,0 +1,156 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net - Catch-all default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive and general validators
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-+() ]+$');
+    }
+
+    // Role assertions
+    function isUserInDb() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+
+    function isAdmin() {
+      return isSignedIn() && (
+        (request.auth.token.email == "natanmarinhocontateste@gmail.com") ||
+        (request.auth.token.email == "brisasofc@gmail.com") ||
+        (isUserInDb() && getUserRole() == "admin")
+      );
+    }
+
+    // Operators and Admins both have standard list/read/write permissions
+    function isOperador() {
+      return isSignedIn() && (
+        (request.auth.token.email == "natanmarinhocontateste@gmail.com") ||
+        (request.auth.token.email == "brisasofc@gmail.com") ||
+        (isUserInDb() && (getUserRole() == "operador" || getUserRole() == "admin"))
+      );
+    }
+
+    // Entity validation schemas (Anti-Update-Gap / ABAC)
+    function isValidUser(data) {
+      return data.uid is string && data.uid.size() <= 128 &&
+             data.email is string && data.email.size() <= 320 &&
+             data.name is string && data.name.size() <= 200 &&
+             data.role in ['admin', 'operador'] &&
+             data.status in ['online', 'offline'];
+    }
+
+    function isValidLead(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.name is string && data.name.size() <= 250 &&
+             data.phone is string && data.phone.size() <= 32 &&
+             data.lastMessage is string && data.lastMessage.size() <= 5000 &&
+             data.mode in ['AI', 'HUMAN'] &&
+             data.currentStep in ['opt_in', 'chatting', 'human_escalated'] &&
+             data.unreadCount is int && data.unreadCount >= 0 &&
+             data.avatarColor is string && data.avatarColor.size() <= 64;
+    }
+
+    function isValidMessage(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.leadId is string && data.leadId.size() <= 128 &&
+             data.role in ['user', 'assistant', 'system_alert', 'agent_human'] &&
+             data.text is string && data.text.size() <= 10000;
+    }
+
+    function isValidFlowConfig(data) {
+      return data.optInText is string && data.optInText.size() <= 10000 &&
+             data.optInButtons is list && data.optInButtons.size() <= 10 &&
+             data.aiGreeting is string && data.aiGreeting.size() <= 10000 &&
+             data.aiSystemPrompt is string && data.aiSystemPrompt.size() <= 30000 &&
+             data.escalationKeywords is list && data.escalationKeywords.size() <= 100 &&
+             data.activeStoreId is string && data.activeStoreId.size() <= 64;
+    }
+
+    function isValidWhatsAppConfig(data) {
+      return data.phoneNumberId is string && data.phoneNumberId.size() <= 128 &&
+             data.accessToken is string && data.accessToken.size() <= 1000 &&
+             data.verifyToken is string && data.verifyToken.size() <= 128 &&
+             data.useOpenAi is bool &&
+             data.openAiKey is string && data.openAiKey.size() <= 500;
+    }
+
+    function isValidAnalytics(data) {
+      return data.totalLeads is int && data.totalLeads >= 0 &&
+             data.aiHandled is int && data.aiHandled >= 0 &&
+             data.humanHandled is int && data.humanHandled >= 0 &&
+             data.conversationsSaved is int && data.conversationsSaved >= 0 &&
+             data.averageConfidence is int && data.averageConfidence >= 0 &&
+             data.savedTokens is int && data.savedTokens >= 0 &&
+             data.responseTimeSavedSec is int && data.responseTimeSavedSec >= 0;
+    }
+
+    function isValidWebhookLog(data) {
+      return data.id is string && data.id.size() <= 128 &&
+             data.direction in ['INBOUND', 'OUTBOUND'] &&
+             data.type in ['text', 'button', 'template'] &&
+             data.payload is string && data.payload.size() <= 50000;
+    }
+
+    // MATCH BLOCKS
+
+    // User Profile matching
+    match /users/{userId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      // Admin can create users, or users can self-create on matching uid if empty, but enforcing rules
+      allow create: if isSignedIn() && request.auth.uid == userId && isValidUser(request.resource.data);
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin()) && isValidUser(request.resource.data) &&
+                     (isAdmin() || (request.resource.data.role == resource.data.role)); // operators can't escalate role
+    }
+
+    // Leads database root
+    match /leads/{leadId} {
+      allow list: if isOperador();
+      allow get: if isOperador() && isValidId(leadId);
+      allow create, write, update: if isOperador() && isValidId(leadId) && isValidLead(request.resource.data);
+    }
+
+    // Messages history inside specific leads subcollection
+    match /leads/{leadId}/messages/{messageId} {
+      allow list: if isOperador() && isValidId(leadId);
+      allow get: if isOperador() && isValidId(leadId) && isValidId(messageId);
+      allow create, write, update: if isOperador() && isValidId(leadId) && isValidId(messageId) && isValidMessage(request.resource.data);
+    }
+
+    // Global Interactive configuration flow (Anti ban, Opt-In definitions)
+    match /flows/config {
+      allow read: if isOperador();
+      allow create, write, update: if isOperador() && isValidFlowConfig(request.resource.data);
+    }
+
+    // Meta parameters and credentials config
+    match /settings/whatsapp {
+      allow read: if isOperador();
+      allow create, write, update: if isOperador() && isValidWhatsAppConfig(request.resource.data);
+    }
+
+    // Current general operation logs
+    match /analytics/current {
+      allow read: if isOperador();
+      allow create, write, update: if isOperador() && isValidAnalytics(request.resource.data);
+    }
+
+    // Webhook event logs
+    match /webhook_logs/{logId} {
+      allow list: if isOperador();
+      allow get: if isOperador() && isValidId(logId);
+      allow create, write, update: if isOperador() && isValidId(logId) && isValidWebhookLog(request.resource.data);
+    }
+  }
+}

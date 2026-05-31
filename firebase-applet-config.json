@@ -1,0 +1,10 @@
+{
+  "projectId": "central-autocar",
+  "appId": "1:560659713877:web:f477790c196e0a8f5c29dc",
+  "apiKey": "AIzaSyDXen38LRqBt2qkCkS2nlAPhWVhyZfwDs4",
+  "authDomain": "central-autocar.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "central-autocar.firebasestorage.app",
+  "messagingSenderId": "560659713877",
+  "measurementId": "G-XZ6SBV5G4W"
+}
